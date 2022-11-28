@@ -27,51 +27,48 @@ def index():
 @app.route('/submission', methods=['POST'])
 def index_post():
     attributes = None
-    if request.form['submit'] == "live":
+    if request.form['submit'] == "Live":
         url = request.form['text']
         m = re.match(link_pattern, url)
         if not m:
             return "Expected track, album, playlist, or artist link"
         attributes = collect_attributes(m.group(1), m.group(2))
-    elif request.form['submit'] == "demo":
+        # f1 = open("./submission.json", "w")
+        # json.dump(attributes, f1)
+        # f1.close()
+    elif request.form['submit'] == "Demo":
         with open("./submission.json") as f:
             attributes = json.load(f)
     return attributes
 
 def collect_attributes(query_type, input_id):
-    attributes = []
     if query_type == "track":
-        track_att = track_attributes(input_id)
-        track_att["name"] = sp.track(input_id)["name"]
-        attributes.append(track_att)
+        tr_ids = [input_id]
+        names = [sp.track(input_id)["name"]]
     elif query_type == "album": # annoying that albums, playlists, and artists arrange track info differently
         track_dict = sp.album_tracks(input_id)
-        for track in track_dict["items"]:
-            track_att = track_attributes(track["id"])
-            track_att["name"] = track["name"]
-            attributes.append(track_att)
+        tr_ids = [track["id"] for track in track_dict["items"]]
+        names = [track["name"] for track in track_dict["items"]]
     elif query_type == "playlist":
         track_dict = sp.playlist_tracks(input_id)
-        for track in track_dict["items"]:
-            track_att = track_attributes(track["track"]["id"])
-            track_att["name"] = track["track"]["name"]
-            attributes.append(track_att)
+        tr_ids = [track["track"]["id"] for track in track_dict["items"]]
+        names = [track["track"]["name"] for track in track_dict["items"]]
     elif query_type == "artist":
         track_dict = sp.artist_top_tracks(input_id)
-        for track in track_dict["tracks"]:
-            track_att = track_attributes(track["id"])
-            track_att["name"] = track["name"]
-            attributes.append(track_att)
+        tr_ids = [track["id"] for track in track_dict["tracks"]]
+        names = [track["name"] for track in track_dict["tracks"]]
     else:
         return f"Expected track, album, playlist, or artist; got {query_type}"
-    return attributes
+    return track_attributes(tr_ids, names)
 
-def track_attributes(trid):
+def track_attributes(tr_ids, names):
     attribute_keys = ["danceability","energy","loudness","speechiness","acousticness","liveness","valence"]
-    features = sp.audio_features(trid)[0]
-    track_att = {key:features[key] for key in attribute_keys}
-    track_att["id"] = trid
-    return track_att
+    features = sp.audio_features(tr_ids)
+    track_atts = [{key:f_ls[key] for key in attribute_keys} for f_ls in features]
+    for i_tr in range(len(tr_ids)):
+        track_atts[i_tr]["id"] = tr_ids[i_tr]
+        track_atts[i_tr]["name"] = names[i_tr]
+    return track_atts
 
 if __name__ == "__main__":
     app.run(debug=True)
