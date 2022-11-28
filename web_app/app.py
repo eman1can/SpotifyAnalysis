@@ -33,11 +33,11 @@ def index_post():
         if not m:
             return "Expected track, album, playlist, or artist link"
         attributes = collect_attributes(m.group(1), m.group(2))
-        # f1 = open("./submission.json", "w")
-        # json.dump(attributes, f1)
+        # f1 = open("./demo.json", "w")
+        # json.dump(attributes, f1, indent=4)
         # f1.close()
     elif request.form['submit'] == "Demo":
-        with open("./submission.json") as f:
+        with open("./demo.json") as f:
             attributes = json.load(f)
     return attributes
 
@@ -62,7 +62,7 @@ def collect_attributes(query_type, input_id):
     return track_attributes(tr_ids, names)
 
 def track_attributes(tr_ids, names):
-    attribute_keys = ["danceability","energy","loudness","speechiness","acousticness","liveness","valence"]
+    attribute_keys = ["tempo", "danceability","energy","loudness","speechiness","acousticness","liveness","valence"]
     features = sp.audio_features(tr_ids)
     track_atts = [{key:f_ls[key] for key in attribute_keys} for f_ls in features]
     for i_tr in range(len(tr_ids)):
