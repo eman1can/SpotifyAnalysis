@@ -1,7 +1,19 @@
 from flask import Flask, render_template, request
+from spotipy_client import SpotipyClient
 import re
 
+import spotipy
+import spotipy.util as util
+from spotipy import SpotifyException
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
+
+SPOTIPY_CLIENT_ID = ''
+SPOTIPY_CLIENT_SECRET = ''
+
 app = Flask(__name__)
+scope = 'user-top-read,user-library-read,user-read-recently-played'
+oauth = SpotifyOAuth(scope=scope, client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET, redirect_uri='http://127.0.0.1:9090')
+sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET), auth_manager=oauth)
 
 link_pattern = r"https:\/\/open.spotify.com\/([^\/]*)\/([^\?]*)"
 
@@ -17,20 +29,22 @@ def index_post():
         return "Invalid submission"
 
     processed_text = ""
+    attributes = None
     input_id = m.group(2)
-    
+
     match m.group(1): # python 3.10 feature
         case "track":
-            processed_text = "track: " + input_id
+            attributes = sp.track(input_id)
         case "album":
-            processed_text = "album: " + input_id
+            attributes = sp.album(input_id)
         case "playlist":
-            processed_text = "playlist: " + input_id
+            attributes = sp.playlist(input_id)
         case "artist":
-            processed_text = "artist: " + input_id
+            attributes = sp.artist(input_id)
         case _:
             return "Expected track, album, playlist, or artist link"
-    
+        
+    print(attributes)
     return processed_text
 
 if __name__ == "__main__":
