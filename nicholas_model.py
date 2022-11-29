@@ -12,6 +12,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import confusion_matrix, f1_score
 from imblearn.over_sampling import SMOTE
+from pickle import dump as pk_dump
 
 def cv_score(model, x, y, n_folds=5, scorer=f1_score):
     folds = KFold(n_splits=n_folds, shuffle=True, random_state=0)
@@ -104,14 +105,14 @@ for train_index, test_index in folds.split(x_train):
     kf_yh = models[best_m].predict(kf_x_test)
     best_scores[best_m].append(f1_score(kf_y_test, kf_yh))
 
-print('ALL CV SCORES')
+print('\nALL CV SCORES')
 for m, scores in cv_scores.items():
     print(f'{m:10}', end='')
     for s in scores:
         print(f'{s:6.3f}', end='')
     print()
 
-print('BEST SCORES')
+print('\nBEST SCORES')
 for m, scores in best_scores.items():
     print(f'{m:10}', end='')
     for s in scores:
@@ -131,3 +132,6 @@ holdout_score = f1_score(y_test, yh)
 
 print(f'Holdout F1 score: {holdout_score:.3f}')
 print(confusion_matrix(y_test, yh))
+
+with open('model.pickle', 'wb') as file:
+    pk_dump(model, file)
