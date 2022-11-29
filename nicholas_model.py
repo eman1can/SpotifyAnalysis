@@ -122,7 +122,8 @@ resampler = SMOTE()
 x_train, y_train = resampler.fit_resample(x_train, y_train)
 
 # Holdout test
-model = models['logreg']
+print('Selecting logreg as best model')
+model = models['logreg'] 
 
 model.fit(x_train, y_train)
 yh = model.predict(x_test)
