@@ -1,24 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Spotify Analysis</title>
-</head>
-<body>
-    <h1>Spotify Analysis</h1>
+    <head>
+        <meta charset="UTF-8">
+        <title>Spotify Analysis</title>
+        <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    </head>
+    <body>
+        <div style="margin: 2% 5% 2% 5%">
+            <h1>Spotify Analysis</h1>
 
-    <form action="/submission" method="POST">
-        <input type="submit" name="submit" value="Demo">
-    </form>
-    
-    <br><br><br>
-
-    <p>If setup has not been performed, then live querying of Spotify data is not available. See the above demo instead</p>
-    <form action="/submission" method="POST">
-        <input name="text">
-        <input type="submit" name="submit" value="Live">
-    </form>
-    
-</body>
-
+            <div style="width: 45%; float: left">
+                <h2>Live Spotify Demo</h2>
+                <p>This requires a Spotify Developer Account to be used. One can be make for free at <a href="https://developer.spotify.com/dashboard/#">https://developer.spotify.com/dashboard/#</a></p>
+                <form action="/submission" method="POST">
+                    <h3><label for="client_id">Client Id</label></h3>
+                    <input id="client_id" name="client_id" class="w3-input" required>
+                    <h3><label for="client_secret">Client Secret</label></h3>
+                    <input id="client_secret" name="client_secret" type="password" class="w3-input" required>
+                    <h3><label for="link">Enter a spotify link</label></h3>
+                    <input id="link" name="link" class="w3-input" required>
+                    <input type="submit" name="submit" value="Live" style="width: 100%; margin-top: 3%" class="w3-btn w3-border w3-round-large">
+                </form>
+            </div>
+            <div style="margin-left: 50%">
+                <h2>Static Demo</h2>
+                <p>The below album has been given as an example, and the data for it has already can be queried. This allows it to be used without a Spotify developer account.</p>
+                <iframe style="border-radius:12px" src="https://open.spotify.com/embed/album/4Hjqdhj5rh816i1dfcUEaM?utm_source=generator" width="100%" height="380" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                <form action="/submission" method="POST">
+                    <input type="submit" name="submit" value="Demo" style="width: 100%; margin-top: 3%" class="w3-btn w3-border w3-round-large">
+                </form>
+            </div>
+        </div>
+        <div style="margin-left: 5%" id="results" hidden="hidden">
+            <h2>Results</h2>
+            <div>
+                <table>
+                    <tr>
+                        <th>Index</th>
+                        <th>Song Name</th>
+                        <th>Will Like?</th>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </body>
 </html>

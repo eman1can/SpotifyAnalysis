@@ -1,22 +1,19 @@
 import json
+
+import pandas as pd
 from flask import Flask, render_template, request
 import re
 
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 
+from util import load_json
+
 LIVE_QUERY = False
-SPOTIPY_CLIENT_ID = ''
-SPOTIPY_CLIENT_SECRET = ''
 SPOTIPY_REDIRECT = 'http://127.0.0.1:9090/callback'
 
 app = Flask(__name__)
 scope = 'user-top-read,user-library-read,user-read-recently-played'
-oauth = None
-sp = None
-if LIVE_QUERY:
-    oauth = SpotifyOAuth(scope=scope, client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET, redirect_uri=SPOTIPY_REDIRECT)
-    sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET), auth_manager=oauth)
 
 link_pattern = r"https:\/\/open.spotify.com\/([^\/]*)\/([^\?]*)"
 
@@ -26,26 +23,81 @@ def index():
 
 @app.route('/submission', methods=['POST'])
 def index_post():
+    url = ''
+    client_id = ''
+    client_secret = ''
     attributes = None
     if request.form['submit'] == "Live":
-        url = request.form['text']
+        url = request.form['link']
+        client_id = request.form['client_id']
+        client_secret = request.form['client_secret']
+
+        oauth = SpotifyOAuth(scope=scope, client_id=client_id, client_secret=client_secret, redirect_uri=SPOTIPY_REDIRECT)
+        sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id=client_id, client_secret=client_secret), auth_manager=oauth)
+
         m = re.match(link_pattern, url)
         if not m:
             return "Expected track, album, playlist, or artist link"
-        attributes = collect_attributes(m.group(1), m.group(2))
+        attributes = collect_attributes(sp, m.group(1), m.group(2))
         # f1 = open("./demo.json", "w")
         # json.dump(attributes, f1, indent=4)
         # f1.close()
     elif request.form['submit'] == "Demo":
-        with open("./demo.json") as f:
+        with open("web_app/demo.json") as f:
             attributes = json.load(f)
-    return attributes
+    dataset = []
+    tinfo = []
+    for ix, track in enumerate(attributes):
+        print(track.keys())
+        tinfo.append((
+            track['id'],
+            track['name'],
+            f"{int(track['duration_ms'] / 60000)}:" + str(int((track['duration_ms'] % 60000) / 1000)).zfill(2)
+        ))
+        dataset.append([
+            track['duration_ms'],
+            track['listenCount'],
+            track['tempo'],
+            track['danceability'],
+            track['energy'],
+            track['loudness'],
+            track['speechiness'],
+            track['acousticness'],
+            track['liveness'],
+            track['valence']
+        ])
+    df = pd.DataFrame(dataset)
+    # TODO: Apply Normalization
+    print(tinfo)
+    print(df)
+    # from pickle import load as pk_load
+    # with open('model.pickle', 'r') as file:
+    #     model = pk_load(file)
+    # yh = model.predict(df)
+    yh = [1 for _ in range(len(attributes))]
 
-def collect_attributes(query_type, input_id):
+    with open('web_app/templates/results.html', 'r') as file:
+        parts = file.read().split('|')
+
+    output = parts[0]
+    output += client_id
+    output += parts[1]
+    output += client_secret
+    output += parts[2]
+    output += url
+    output += parts[3]
+
+    for ix, (track_id, track_name, duration) in enumerate(tinfo):
+        liked = 'Yes' if yh[ix] == 1 else 'No'
+        output += f'<tr style="width: 15%"><td>{ix}</td><td>{track_name}</td><td>{duration}</td><td>{liked}</td></tr>'
+
+    return output + parts[4]
+
+def collect_attributes(sp, query_type, input_id):
     if query_type == "track":
         tr_ids = [input_id]
         names = [sp.track(input_id)["name"]]
-    elif query_type == "album": # annoying that albums, playlists, and artists arrange track info differently
+    elif query_type == "album":  # annoying that albums, playlists, and artists arrange track info differently
         track_dict = sp.album_tracks(input_id)
         tr_ids = [track["id"] for track in track_dict["items"]]
         names = [track["name"] for track in track_dict["items"]]
@@ -59,16 +111,22 @@ def collect_attributes(query_type, input_id):
         names = [track["name"] for track in track_dict["tracks"]]
     else:
         return f"Expected track, album, playlist, or artist; got {query_type}"
-    return track_attributes(tr_ids, names)
+    return track_attributes(sp, tr_ids, names)
 
-def track_attributes(tr_ids, names):
-    attribute_keys = ["tempo", "danceability","energy","loudness","speechiness","acousticness","liveness","valence"]
+
+def track_attributes(sp, tr_ids, names):
+    attribute_keys = ["key", "tempo", "danceability", "energy", "loudness", "speechiness", "acousticness", "liveness", "valence"]
+    track_info = sp.tracks(tr_ids)['tracks']
     features = sp.audio_features(tr_ids)
-    track_atts = [{key:f_ls[key] for key in attribute_keys} for f_ls in features]
+    listened_songs = [x['trackId'] for x in load_json('listened_songs.json')]
+    track_atts = [{key: f_ls[key] for key in attribute_keys} for f_ls in features]
     for i_tr in range(len(tr_ids)):
         track_atts[i_tr]["id"] = tr_ids[i_tr]
         track_atts[i_tr]["name"] = names[i_tr]
+        track_atts[i_tr]["duration_ms"] = track_info[i_tr]['duration_ms']
+        track_atts[i_tr]["listenCount"] = listened_songs.count(tr_ids[i_tr])
     return track_atts
+
 
 if __name__ == "__main__":
     app.run(debug=True)

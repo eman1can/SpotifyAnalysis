@@ -56,31 +56,40 @@ class SpotipyClient:
             name = name[:name.index('-')].strip()
         return name.title()
 
-    def _get_history(self):
-        removed_songs = load_json('removed.json')
-        history_files = [x for x in listdir('data') if x.startswith('StreamingHistory')]
-        played = []
-        for file in history_files:
-            played += load_json(file)
+    def _parse_history(self, played):
+        # endTime
+        # artistName
+        # trackName
+        # trackId
+        # msPlayed
 
         ids = {}
         to_remove = []
         if json_exists('track_ids.json'):
             ids = load_json('track_ids.json')
-        print(f'{0:5} / {len(played):5}', end='')
+
+        removed_songs = load_json('removed.json')
+
+        print(f'{0:6} / {len(played):6}', end='')
         for ix, record in enumerate(played):
-            print('\b' * 13 + f'{ix:5} / {len(played):5}', end='')
+            print('\b' * 15 + f'{ix:6} / {len(played):6}', end='')
 
             if record['artistName'] in removed_songs and record['trackName'] in removed_songs[record['artistName']]:
                 print('\nSkipping', record['trackName'], 'by', record['artistName'] + '; Removed.')
                 to_remove.append(ix)
                 continue
 
-            save_json('track_ids.json', ids)
             key = record['trackName'] + '_' + record['artistName']
+            if 'trackId' in record.keys():
+                if key not in ids:
+                    ids[key] = record['trackId']
+                    save_json('track_ids.json', ids)
+                continue
+
             if key in ids.keys():
                 record['trackId'] = ids[key]
                 continue
+
             query = 'track:' + self._clean_name(record['trackName']) + ', artist:' + self._clean_name(record['artistName'])
             tracks = self._sp.search(query, type='track')['tracks']['items']
 
@@ -92,6 +101,7 @@ class SpotipyClient:
                     filtered_tracks = [track for track in filtered_tracks if track['album']['album_type'] != 'compilation']
                 if len(filtered_tracks) == 1:
                     ids[key] = record['trackId'] = filtered_tracks[0]['id']
+                    save_json('track_ids.json', ids)
                     continue
                 if len(filtered_tracks) == 0:
                     print('\nAll Filtered Tracks Skipped')
@@ -103,21 +113,50 @@ class SpotipyClient:
                     to_remove.append(ix)
                     continue
                 ids[key] = record['trackId'] = self._resolve_republished(filtered_tracks, played_date)
+                save_json('track_ids.json', ids)
                 continue
             if len(tracks) == 0:
                 print('\nCan\'t find track', record['trackName'], 'by', record['artistName'])
                 to_remove.append(ix)
                 continue
             ids[key] = record['trackId'] = tracks[0]['id']
+            save_json('track_ids.json', ids)
         save_json('track_ids.json', ids)
         for ix in reversed(to_remove):
             played.pop(ix)
-        # endTime
-        # artistName
-        # trackName
-        # trackId
-        # msPlayed
+
         return played
+
+    def _get_past_history(self):
+        if json_exists('past_history.json'):
+            return load_json('past_history.json')
+        history_files = [x for x in listdir(join('data', 'history')) if x.startswith('endsong')]
+        played = []
+        for file in history_files:
+            for song in load_json(join('history', file)):
+                played_at = datetime.strptime(song['ts'], '%Y-%m-%dT%H:%M:%SZ')
+                if song['master_metadata_album_artist_name'] is None:
+                    continue
+                played.append({
+                    'endTime': played_at.strftime("%Y-%m-%d %H:%M"),
+                    'artistName': song['master_metadata_album_artist_name'],
+                    'trackName': song['master_metadata_track_name'],
+                    'msPlayed': song['ms_played'],
+                    'trackId': song['spotify_track_uri'][len('spotify:track:'):]
+                })
+        return self._parse_history(played)
+
+    def _get_history(self):
+        history_files = [x for x in listdir('data') if x.startswith('StreamingHistory')]
+        played = []
+        played_keys = set()
+        for file in history_files:
+            for song in load_json(file):
+                key = song['trackName'] + '_' + song['endTime']
+                if key not in played_keys:
+                    played_keys.add(key)
+                    played.append(song)
+        return self._parse_history(list(played))
 
     def _get_recent(self):
         recent_files = [x for x in listdir(join('data', 'listened'))]
@@ -126,6 +165,7 @@ class SpotipyClient:
         for file in recent_files:
             print(f'Loading {file}')
             data = load_json(join('listened', file))
+
             for song in data['items']:
                 key = song['track']['id'] + '_' + song['played_at']
                 if key in listened:
@@ -147,11 +187,22 @@ class SpotipyClient:
     def get_listened_songs(self):
         if json_exists('listened_songs.json'):
             return load_json('listened_songs.json')
+        listened_keys = set()
         listened = []
-        listened += self._get_history()
-        listened += self._get_recent()
-        save_json('listened_songs.json', listened)
-        return listened
+
+        def add_songs(songs):
+            for song in songs:
+                key = song['trackId'] + '_' + song['endTime']
+                if key not in listened_keys:
+                    listened_keys.add(key)
+                    listened.append(song)
+
+        add_songs(self._get_past_history())
+        add_songs(self._get_history())
+        add_songs(self._get_recent())
+
+        save_json('listened_songs.json', list(listened))
+        return list(listened)
 
     def get_liked_songs(self):
         if json_exists('liked_songs.json'):
@@ -180,14 +231,14 @@ class SpotipyClient:
 
     def get_track_information(self, track_ids):
         track_info = {}
-        print(f'{0:4} / {len(track_ids):4}', end='')
+        print(f'{0:6} / {len(track_ids):6}', end='')
         for ix in range(0, len(track_ids), 50):
             for track in self._sp.tracks(track_ids[ix:ix + 50])['tracks']:
                 if track is None:
                     continue
                 track_info[track['id']] = track
-            print('\b' * 11 + f'{ix:4} / {len(track_ids):4}', end='')
-        print('\b' * 11 + f'{len(track_ids):4} / {len(track_ids):4}')
+            print('\b' * 15 + f'{ix:6} / {len(track_ids):6}', end='')
+        print('\b' * 15 + f'{len(track_ids):6} / {len(track_ids):6}')
         return track_info
 
     def get_track_attributes(self, track_ids):
@@ -201,15 +252,15 @@ class SpotipyClient:
             to_query.append(track_id)
         print('Getting Audio Features')
         if len(to_query) > 0:
-            print(f'{0:4} / {len(to_query):4}', end='')
+            print(f'{0:6} / {len(to_query):6}', end='')
             for ix in range(0, len(to_query), 100):
                 for track in self._sp.audio_features(to_query[ix:ix + 100]):
                     if track is None:
                         continue
                     track_info['features'][track['id']] = track
-                print('\b' * 11 + f'{ix:4} / {len(to_query):4}', end='')
+                print('\b' * 15 + f'{ix:6} / {len(to_query):6}', end='')
                 save_json('internal_audio_features.json', track_info['features'])
-            print('\b' * 11 + f'{len(to_query):4} / {len(to_query):4}')
+            print('\b' * 15 + f'{len(to_query):6} / {len(to_query):6}')
             # Account for tracks which have no features
             for track_id in track_ids:
                 if track_id not in track_info['features']:
@@ -217,6 +268,7 @@ class SpotipyClient:
             save_json('internal_audio_features.json', track_info['features'])
         print('Got all Audio Features')
         print('Getting Audio Analysis')
+        return track_info
         if chunked_json_exists('audio/analysis.json'):
             track_info['analysis'] = load_chunked_json('audio/analysis.json')
         if len(track_info['analysis'].keys()) < len(track_ids):
