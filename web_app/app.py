@@ -28,14 +28,16 @@ def index():
 @app.route('/submission', methods=['POST'])
 def index_post():
     url = ''
+    count = ''
     client_id = ''
     client_secret = ''
     attributes = None
     if request.form['submit'] == "Live":
         url = request.form['link']
+        count = request.form['count']
         client_id = request.form['client_id']
         client_secret = request.form['client_secret']
-
+        print(count, int(count))
         oauth = SpotifyOAuth(scope=scope, client_id=client_id, client_secret=client_secret, redirect_uri=SPOTIPY_REDIRECT)
         sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id=client_id, client_secret=client_secret), auth_manager=oauth)
 
@@ -54,7 +56,9 @@ def index_post():
             output += parts[2]
             output += url
             output += parts[3]
-            output += f'<h3>Error: {attributes}</h3>' + parts[4]
+            output += count
+            output += parts[4]
+            output += f'<h3>Error: {attributes}</h3>' + parts[5]
             return output
         # f1 = open("./demo.json", "w")
         # json.dump(attributes, f1, indent=4)
@@ -72,7 +76,7 @@ def index_post():
             f"{int(track['duration_ms'] / 60000)}:" + str(int((track['duration_ms'] % 60000) / 1000)).zfill(2)
         ))
         dataset.append([
-            track['listenCount'],
+            int(count),
             track['tempo'],
             track['danceability'],
             track['energy'],
@@ -97,13 +101,16 @@ def index_post():
         if np.sum(A) == 0:
             return A
         return minmax_scale(A)
-
+    listen_count = pd.read_csv('listened_data.csv')[['Listen Count']].to_numpy().reshape(-1)
     # Regularize columns
     print(df)
     df.to_csv('test.csv')
     df[4] = 10 ** (df[4] / 20)
-    df[0] = regularize(df[0])
+    all_norm_count = regularize(np.concatenate((df[0].to_numpy(), listen_count), axis=0))
+    for ix in range(len(df[0])):
+        df[0] = all_norm_count[:len(df[0])]
     df[1] = regularize(df[1])
+    print(df[0])
     print(df)
     yh = model.predict(df)
     print(yh)
@@ -119,13 +126,15 @@ def index_post():
     output += parts[2]
     output += url
     output += parts[3]
+    output += count
+    output += parts[4]
 
     output += """<table><tr style="width: 15%"><th>Index</th><th>Song Name</th><th>Duration</th><th>Will Like?</th></tr>"""
     for ix, (track_id, track_name, duration) in enumerate(tinfo):
         liked = 'Yes' if yh[ix] == 1 else 'No'
         output += f'<tr style="width: 15%"><td>{ix}</td><td>{track_name}</td><td>{duration}</td><td>{liked}</td></tr>'
 
-    return output + '</table>' + parts[4]
+    return output + '</table>' + parts[5]
 
 def collect_attributes(sp, query_type, input_id):
     if query_type == "track":
