@@ -44,7 +44,7 @@ def index_post():
             return "Expected track, album, playlist, or artist link"
         attributes = collect_attributes(sp, m.group(1), m.group(2))
         if isinstance(attributes, str):
-            with open('web_app/templates/results.html', 'r') as file:
+            with open('templates/results.html', 'r') as file:
                 parts = file.read().split('|')
 
             output = parts[0]
@@ -60,7 +60,7 @@ def index_post():
         # json.dump(attributes, f1, indent=4)
         # f1.close()
     elif request.form['submit'] == "Demo":
-        with open("web_app/demo.json") as f:
+        with open("demo.json") as f:
             attributes = json.load(f)
     print(attributes)
     dataset = []
@@ -109,7 +109,7 @@ def index_post():
     print(yh)
     # yh = [1 for _ in range(len(attributes))]
 
-    with open('web_app/templates/results.html', 'r') as file:
+    with open('templates/results.html', 'r') as file:
         parts = file.read().split('|')
 
     output = parts[0]
