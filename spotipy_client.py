@@ -241,6 +241,18 @@ class SpotipyClient:
         print('\b' * 15 + f'{len(track_ids):6} / {len(track_ids):6}')
         return track_info
 
+    def get_audio_features(self, track_ids):
+        features = {}
+        print(f'{0:6} / {len(track_ids):6}', end='')
+        for ix in range(0, len(track_ids), 100):
+            for track in self._sp.audio_features(track_ids[ix:ix + 100]):
+                if track is None:
+                    continue
+                features[track['id']] = track
+            print('\b' * 15 + f'{ix:6} / {len(track_ids):6}', end='')
+        print('\b' * 15 + f'{len(track_ids):6} / {len(track_ids):6}')
+        return features
+
     def get_track_attributes(self, track_ids):
         track_info = {'features': {}, 'analysis': {}}
         if json_exists('internal_audio_features.json'):

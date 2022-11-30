@@ -7,6 +7,7 @@ import re
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 
+from spotipy_client import SpotipyClient
 from util import load_json
 from pickle import load as pk_load
 
@@ -17,6 +18,8 @@ app = Flask(__name__)
 scope = 'user-top-read,user-library-read,user-read-recently-played'
 
 link_pattern = r"https:\/\/open.spotify.com\/([^\/]*)\/([^\?]*)"
+
+import numpy as np
 
 @app.route('/')
 def index():
@@ -69,9 +72,7 @@ def index_post():
             f"{int(track['duration_ms'] / 60000)}:" + str(int((track['duration_ms'] % 60000) / 1000)).zfill(2)
         ))
         dataset.append([
-            track['duration_ms'],
             track['listenCount'],
-            track['key'],
             track['tempo'],
             track['danceability'],
             track['energy'],
@@ -86,7 +87,26 @@ def index_post():
 
     with open('model.pickle', 'rb') as file:
         model = pk_load(file)
+
+    def minmax_scale(A):
+        min = np.amin(A)
+        max = np.amax(A)
+        return (A - min) / (max - min)
+
+    def regularize(A):
+        if np.sum(A) == 0:
+            return A
+        return minmax_scale(A)
+
+    # Regularize columns
+    print(df)
+    df.to_csv('test.csv')
+    df[4] = 10 ** (df[4] / 20)
+    df[0] = regularize(df[0])
+    df[1] = regularize(df[1])
+    print(df)
     yh = model.predict(df)
+    print(yh)
     # yh = [1 for _ in range(len(attributes))]
 
     with open('web_app/templates/results.html', 'r') as file:
@@ -130,8 +150,9 @@ def collect_attributes(sp, query_type, input_id):
 
 def track_attributes(sp, tr_ids, names):
     attribute_keys = ["key", "tempo", "danceability", "energy", "loudness", "speechiness", "acousticness", "liveness", "valence"]
-    track_info = sp.tracks(tr_ids)['tracks']
-    features = sp.audio_features(tr_ids)
+    client = SpotipyClient()
+    track_info = list(client.get_track_information(tr_ids).values())
+    features = list(client.get_audio_features(tr_ids).values())
     listened_songs = [x['trackId'] for x in load_json('listened_songs.json')]
     track_atts = [{key: f_ls[key] for key in attribute_keys} for f_ls in features]
     for i_tr in range(len(tr_ids)):
