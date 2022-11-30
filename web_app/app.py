@@ -8,6 +8,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 
 from util import load_json
+from pickle import load as pk_load
 
 LIVE_QUERY = False
 SPOTIPY_REDIRECT = 'http://127.0.0.1:9090/callback'
@@ -39,16 +40,29 @@ def index_post():
         if not m:
             return "Expected track, album, playlist, or artist link"
         attributes = collect_attributes(sp, m.group(1), m.group(2))
+        if isinstance(attributes, str):
+            with open('web_app/templates/results.html', 'r') as file:
+                parts = file.read().split('|')
+
+            output = parts[0]
+            output += client_id
+            output += parts[1]
+            output += client_secret
+            output += parts[2]
+            output += url
+            output += parts[3]
+            output += f'<h3>Error: {attributes}</h3>' + parts[4]
+            return output
         # f1 = open("./demo.json", "w")
         # json.dump(attributes, f1, indent=4)
         # f1.close()
     elif request.form['submit'] == "Demo":
         with open("web_app/demo.json") as f:
             attributes = json.load(f)
+    print(attributes)
     dataset = []
     tinfo = []
     for ix, track in enumerate(attributes):
-        print(track.keys())
         tinfo.append((
             track['id'],
             track['name'],
@@ -57,6 +71,7 @@ def index_post():
         dataset.append([
             track['duration_ms'],
             track['listenCount'],
+            track['key'],
             track['tempo'],
             track['danceability'],
             track['energy'],
@@ -68,13 +83,11 @@ def index_post():
         ])
     df = pd.DataFrame(dataset)
     # TODO: Apply Normalization
-    print(tinfo)
-    print(df)
-    # from pickle import load as pk_load
-    # with open('model.pickle', 'r') as file:
-    #     model = pk_load(file)
-    # yh = model.predict(df)
-    yh = [1 for _ in range(len(attributes))]
+
+    with open('model.pickle', 'rb') as file:
+        model = pk_load(file)
+    yh = model.predict(df)
+    # yh = [1 for _ in range(len(attributes))]
 
     with open('web_app/templates/results.html', 'r') as file:
         parts = file.read().split('|')
@@ -87,11 +100,12 @@ def index_post():
     output += url
     output += parts[3]
 
+    output += """<table><tr style="width: 15%"><th>Index</th><th>Song Name</th><th>Duration</th><th>Will Like?</th></tr>"""
     for ix, (track_id, track_name, duration) in enumerate(tinfo):
         liked = 'Yes' if yh[ix] == 1 else 'No'
         output += f'<tr style="width: 15%"><td>{ix}</td><td>{track_name}</td><td>{duration}</td><td>{liked}</td></tr>'
 
-    return output + parts[4]
+    return output + '</table>' + parts[4]
 
 def collect_attributes(sp, query_type, input_id):
     if query_type == "track":
